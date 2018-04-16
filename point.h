@@ -10,6 +10,8 @@
 #include <numeric>
 #include <cmath>
 #include <cstdlib>
+#include <string>
+#include <sstream>
 
 using el_type = double;
 
@@ -84,6 +86,37 @@ public:
   {
     std::copy(p.begin(), p.end(), std::experimental::make_ostream_joiner(os, ", "));
     return os;
+  }
+
+  friend std::istream& operator>>(std::istream& is, point& p)
+  {
+    p.clear();
+    el_type el;
+    char c;
+    std::string line;
+    if (std::getline(is, line)) {
+      p = std::move(from_string(line));
+    }
+    return is;
+  }
+
+  static point from_string(const std::string& s)
+  {
+    el_type el;
+    char c;
+    point p;
+    std::istringstream iss(s);
+    for (;;) {
+      iss >> el;
+      p.push_back(el);
+      do {
+        iss >> c;
+        if (iss.eof()) {
+          return std::move(p);
+        }
+      } while (c != ',');
+    }
+    return std::move(p);
   }
 
   el_type l2() const
