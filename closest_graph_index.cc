@@ -32,12 +32,14 @@ struct node
   };
 
   int id;
+  mutable bool visited;
   const point* _point;
   // 0 - negative direction
   // 1 - positive direction
   std::vector<std::array<dimention_closest_node, 2>> closest_nodes;
 
   node(const point* p) :
+    visited(false),
     _point(p),
     closest_nodes(p->size())
   {
@@ -98,6 +100,19 @@ std::deque<node> build_index(const std::deque<point>& points)
   return std::move(nodes);
 }
 
+bool same_dir(const point& p1, const point& p2)
+{
+  bool take_it = true;
+  int i_p1 = 0;
+  for (double p2_i : p2) {
+    if (p2_i < 0 && p1[i_p1] > 0 || p2_i > 0 && p1[i_p1] < 0) {
+      take_it = false;
+    }
+    i_p1++;
+  }
+  return take_it;
+}
+
 std::pair<double, const node&> find_closest(const std::deque<node>& nodes, const point& p)
 {
   const node* current = &nodes[0];
@@ -106,28 +121,53 @@ std::pair<double, const node&> find_closest(const std::deque<node>& nodes, const
 
   std::cerr << *current->_point << std::endl;
 
-  for (;;) {
-    const node* next = nullptr;
+  while (!current->visited) {
+    const node* next_d = nullptr;
+    const node* next_s = nullptr;
 
+    double s = std::numeric_limits<double>::max();
     int i_v = 0;
     for (const auto& cn : current->closest_nodes) {
-      for (const auto& dir : cn) {
-        double d1 = dir._node->_point->distance(p);
+      if (v[i_v] >= 0.0) {
+        double d1 = cn[1]._node->_point->distance(p);
         if (d1 < d) {
           d = d1;
-          next = dir._node;
+          next_d = cn[1]._node;
+        } else if (d1 < s) {
+          point v1 = p - *cn[1]._node->_point;
+          if (same_dir(v1, v)) {
+            s = d1;
+            next_s = cn[1]._node;
+          }
+        }
+      }
+      if (v[i_v] <= 0.0) {
+        double d1 = cn[0]._node->_point->distance(p);
+        if (d1 < d) {
+          d = d1;
+          next_d = cn[0]._node;
+        } else if (d1 < s){
+          point v1 = p - *cn[0]._node->_point;
+          if (same_dir(v1, v)) {
+            s = d1;
+            next_s = cn[0]._node;
+          }
         }
       }
       i_v++;
     }
 
-    if (next == nullptr) {
-      break;
+    current->visited = true;
+    if (next_d != nullptr) {
+      current = next_d;
+    } else if (next_s != nullptr) {
+      current = next_s;
     } else {
-      current = next;
-      std::cerr << *current->_point << std::endl;
-      v = p - *current->_point;
+      break;
     }
+    v = p - *current->_point;
+    d = p.distance(*current->_point);
+    std::cerr << *current->_point << std::endl;
   }
 
   return std::make_pair(d, *current);
