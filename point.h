@@ -130,7 +130,7 @@ public:
 
   el_type distance(const point& p) const
   {
-    return std::sqrt(std::inner_product(begin(), end(), p.begin(), 0,
+    return std::sqrt(std::inner_product(begin(), end(), p.begin(), ((el_type)0),
                       std::plus<el_type>(),
                       [] (el_type x1, el_type x2) -> el_type { el_type tmp = x1 - x2; return tmp*tmp; }));
   }

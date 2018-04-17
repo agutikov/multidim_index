@@ -38,6 +38,7 @@ int main(int argc, const char* argv[])
 
   if (argc != 3) {
     std::cout << "\n  Usage: " << argv[0] << " <num_lines> <num_cols>\n" << std::endl;
+    return -1;
   }
 
   size_t lines = std::strtol(argv[1], nullptr, 10);

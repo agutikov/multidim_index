@@ -1,6 +1,7 @@
 *.csv
 gen
-find_closest_simple
+closest_simple
 shuffle
 \#*
-
+.\#*
+*~
