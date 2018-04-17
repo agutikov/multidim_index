@@ -104,23 +104,18 @@ std::pair<double, const node&> find_closest(const std::deque<node>& nodes, const
   point v = p - *current->_point;
   double d = v.abs();
 
+  std::cerr << *current->_point << std::endl;
+
   for (;;) {
     const node* next = nullptr;
 
     int i_v = 0;
     for (const auto& cn : current->closest_nodes) {
-      if (v[i_v] >= 0.0) {
-        double d1 = cn[1]._node->_point->distance(p);
+      for (const auto& dir : cn) {
+        double d1 = dir._node->_point->distance(p);
         if (d1 < d) {
           d = d1;
-          next = cn[1]._node;
-        }
-      }
-      if (v[i_v] <= 0.0) {
-        double d1 = cn[0]._node->_point->distance(p);
-        if (d1 < d) {
-          d = d1;
-          next = cn[0]._node;
+          next = dir._node;
         }
       }
       i_v++;
@@ -130,6 +125,7 @@ std::pair<double, const node&> find_closest(const std::deque<node>& nodes, const
       break;
     } else {
       current = next;
+      std::cerr << *current->_point << std::endl;
       v = p - *current->_point;
     }
   }
