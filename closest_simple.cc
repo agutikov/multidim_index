@@ -12,23 +12,6 @@
 
 #include "point.h"
 
-std::deque<point> from_csv_file(const std::string& filename)
-{
-  std::deque<point> points;
-
-  std::ifstream file(filename, std::ios::in);
-
-  point p;
-  while (!file.eof()) {
-    file >> p;
-    if (p.size() > 0) {
-      points.push_back(p);
-    }
-  }
-
-  return std::move(points);
-}
-
 std::pair<double, point> find_closest(const std::deque<point>& where, const point& what)
 {
   double min_d = std::numeric_limits<double>::max();
