@@ -39,12 +39,12 @@ import random
 import numpy as np
 import itertools
 import json
-
+from collections import namedtuple
 
 delimiter = ','
 
 def help():
-    print("Commands: gen, clusters, clusters_tree", file=sys.stderr)
+    print("Commands: gen, clusters, clusters_tree, clusters_json, find", file=sys.stderr)
     quit(1)
 
 def main():
@@ -80,16 +80,21 @@ def gen():
 class cluster:
     id_counter = itertools.count(1)
 
-    def __init__(self, centroid=None, radius=None):
-        self.id = next(self.id_counter)
-        self.centroid = centroid
-        self.radius = radius
-        self.subclusters = {}
+    def __init__(self, centroid=None, radius=None, id=None):
+        if id is None:
+            self.id = next(self.id_counter)
+        else:
+            self.id = id
         self.points = set()
         self.level = -1
         if centroid is not None:
-            self.points.add(centroid)
+            self.centroid = tuple(centroid)
+            self.points.add(tuple(centroid))
             self.level = 0
+        else:
+            self.centroid = None
+        self.radius = radius
+        self.subclusters = {}
 
     def to_dict(self):
         return {
@@ -97,9 +102,16 @@ class cluster:
             'level': self.level,
             'centroid': list(self.centroid),
             'radius': self.radius,
-            'points': [list(p) for p in self.points],
+            'points': [list(point) for point in self.points],
             'subclusters': {id:c.to_dict() for id,c in self.subclusters.items()},
         }
+
+    def from_dict(data):
+        c = cluster(centroid=data['centroid'], radius=data['radius'], id=data['id'])
+        c.level = data['level']
+        c.points = data['points']
+        c.subclusters = {int(id):cluster.from_dict(c) for id,c in data['subclusters'].items()}
+        return c
 
     def __repr__(self):
         return pformat(self.to_dict(), width=128)
@@ -324,16 +336,70 @@ def do_clusters(flatten, format=None, pair_score='supercluster_radius', contains
             pprint(c)
 
 
+def _json_object_hook(d):
+    try:
+        return namedtuple('JSON_Object', d.keys())(*d.values())
+    except:
+        return dict(d)
 
+
+def find_closest(clusters, point):
+    x = {np.linalg.norm(np.array(p) - np.array(point)):p for p in list(clusters.values())[0].points}
+    pprint(x)
+    while len(clusters) != 1 or next(iter(clusters.values())).level != 0:
+        print(len(clusters))
+        # open single cluster
+        while len(clusters) == 1:
+            clusters = next(iter(clusters.values())).subclusters
+
+        ids_to_remove = set()
+        # select too far away clusters
+        for c1,c2 in permutations(list(clusters.values())):
+            d1 = c1.centroid_distance(point)
+            print(c1.id, d1)
+            d2 = c2.centroid_distance(point)
+            print(c2.id, d2)
+            if d1 - c1.radius > d2 + c2.radius:
+                ids_to_remove.add(c1.id)
+            if d1 + c1.radius < d2 - c2.radius:
+                ids_to_remove.add(c2.id)
+        # prune
+        for id in ids_to_remove:
+            del clusters[id]
+
+        clusters_to_add = []
+        ids_to_remove = set()
+        # open next level clusters
+        for c in clusters.values():
+            if len(c.subclusters) > 0:
+                clusters_to_add += list(c.subclusters.values())
+                ids_to_remove.add(c.id)
+        for id in ids_to_remove:
+            del clusters[id]
+        for c in clusters_to_add:
+            clusters[c.id] = c
+
+    s = next(iter(clusters.values()))
+    print(s)
+    return s.centroid
 
 
 def do_find():
-    #with open(sys.argv[2], "r") 
+    with open(sys.argv[2]) as input:
+        j = json.load(input)
 
+    #print(j)
+    root = cluster.from_dict(j)
+    #print(root)
 
-    #point = [random.random() for j in range(0, vec_len)]
-    pass
+    vec_len = len(root.points[0])
 
+    point = [random.random() for j in range(0, vec_len)]
+    print(point)
+
+    clusters = {root.id:root}
+    result = find_closest(clusters, point)
+    print(result)
 
 
 
