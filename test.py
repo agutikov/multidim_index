@@ -40,6 +40,7 @@ import numpy as np
 import itertools
 import json
 from collections import namedtuple
+import copy
 
 delimiter = ','
 
@@ -60,6 +61,8 @@ def main():
         do_clusters(flatten=True)
     elif sys.argv[1] == 'find':
         do_find()
+    elif sys.argv[1] == 'distance':
+        do_distance()
     else:
         help()
 
@@ -72,6 +75,22 @@ def gen():
 
     for i in range(0, count):
       writer.writerow([random.random() for j in range(0, vec_len)])
+
+def do_distance():
+    points = None
+    with open(sys.argv[2], newline='') as csvfile:
+         reader = csv.reader(csvfile, quoting=csv.QUOTE_NONNUMERIC, delimiter=delimiter)
+         points = list([tuple(row) for row in reader])
+    #d = [np.linalg.norm(np.array(p1) - np.array(p2)) for p1,p2 in combinations(points)]
+    #print("min=%f, mean=%f, max=%f, max-min=%f, std=%f, cv=%f" %
+    #    (np.min(d), np.mean(d), np.max(d), np.max(d)-np.min(d), np.std(d), np.std(d)/np.mean(d)), file=sys.stderr)
+    #print(np.histogram(d, range=[np.min(d), np.max(d)]))
+    center = [0.5]*len(points[1])
+    d = [np.linalg.norm(np.array(center) - np.array(p)) for p in points]
+    print("min=%f, mean=%f, median=%f max=%f, max-min=%f, std=%f, cv=%f" %
+        (np.min(d), np.mean(d), np.median(d), np.max(d), np.max(d)-np.min(d), np.std(d), np.std(d)/np.mean(d)), file=sys.stderr)
+    print(np.histogram(d, bins=21, range=[np.min(d), np.max(d)]))
+
 
 ################################################################################
 
@@ -122,11 +141,11 @@ class cluster:
 
     def _get_radius(self):
         # Max distance from centroid to point
-        #return max([np.linalg.norm(self.centroid - point) for point in points])
+        return max([np.linalg.norm(self.centroid - point) for point in self.points])
 
         # Max distance to outer border of subcluster
         # i.e. max distance from centroid to center of subclusters plus radius of subcluster
-        return max([np.linalg.norm(self.centroid - c.centroid) + c.radius for c in self.subclusters.values()])
+        #return max([np.linalg.norm(self.centroid - c.centroid) + c.radius for c in self.subclusters.values()])
 
     def _get_level(self):
         return 1 + max([0] + [c.level for c in self.subclusters.values()])
@@ -303,7 +322,8 @@ clusters_pair_score_functions = {
 
 contains_cluster_functions = {
     'contains_any_point': cluster.contains_any_point,
-    'contains_centroid': cluster.contains_centroid
+    'contains_centroid': cluster.contains_centroid,
+    'none': lambda x,y: False,
 }
 
 def do_flatten(cluster):
@@ -313,7 +333,7 @@ def do_flatten(cluster):
             a += do_flatten(subcluster)
     return a
 
-def do_clusters(flatten, format=None, pair_score='supercluster_radius', contains_cluster='contains_centroid'):
+def do_clusters(flatten, format=None, pair_score='centroid_distance', contains_cluster='none'):
     points = None
     with open(sys.argv[2], newline='') as csvfile:
          reader = csv.reader(csvfile, quoting=csv.QUOTE_NONNUMERIC, delimiter=delimiter)
@@ -344,21 +364,33 @@ def _json_object_hook(d):
 
 
 def find_closest(clusters, point):
+    count = 0
+    distance_cache = {}
     x = {np.linalg.norm(np.array(p) - np.array(point)):p for p in list(clusters.values())[0].points}
-    pprint(x)
+    #pprint(x)
     while len(clusters) != 1 or next(iter(clusters.values())).level != 0:
-        print(len(clusters))
+        #print(len(clusters))
         # open single cluster
         while len(clusters) == 1:
             clusters = next(iter(clusters.values())).subclusters
+        #print(len(clusters))
 
         ids_to_remove = set()
         # select too far away clusters
         for c1,c2 in permutations(list(clusters.values())):
-            d1 = c1.centroid_distance(point)
-            print(c1.id, d1)
-            d2 = c2.centroid_distance(point)
-            print(c2.id, d2)
+            #pprint(distance_cache)
+            d1 = distance_cache.get(c1.id, None)
+            if d1 is None:
+                count += 1
+                d1 = c1.centroid_distance(point)
+                distance_cache[c1.id] = d1
+            #print(c1.id, d1)
+            d2 = distance_cache.get(c2.id, None)
+            if d2 is None:
+                count += 1
+                d2 = c2.centroid_distance(point)
+                distance_cache[c2.id] = d2
+            #print(c2.id, d2)
             if d1 - c1.radius > d2 + c2.radius:
                 ids_to_remove.add(c1.id)
             if d1 + c1.radius < d2 - c2.radius:
@@ -380,27 +412,41 @@ def find_closest(clusters, point):
             clusters[c.id] = c
 
     s = next(iter(clusters.values()))
-    print(s)
-    return s.centroid
+    #print(s)
+    return s.centroid, distance_cache[s.id], count
 
 
 def do_find():
     with open(sys.argv[2]) as input:
         j = json.load(input)
-
     #print(j)
     root = cluster.from_dict(j)
     #print(root)
-
     vec_len = len(root.points[0])
 
-    point = [random.random() for j in range(0, vec_len)]
-    print(point)
+    repeat = 1
+    if len(sys.argv) > 3:
+        repeat = int(sys.argv[3])
 
-    clusters = {root.id:root}
-    result = find_closest(clusters, point)
-    print(result)
+    for i in range(repeat):
+        print(i)
+        point = [random.random() for j in range(0, vec_len)]
+        #print(point)
 
+        clusters = {root.id:copy.deepcopy(root)}
+        result, distance, count = find_closest(clusters, point)
+        print(distance, count)
+
+        d = 1000
+        simple_result = None
+        for p in root.points:
+            d1 = np.linalg.norm(np.array(p) - np.array(point))
+            if d1 < d:
+                d = d1
+                simple_result = p
+        print(d, len(root.points))
+        if tuple(result) != tuple(simple_result):
+            quit(1)
 
 
 ################################################################################
